@@ -10,6 +10,18 @@ export interface UploadResult {
   error?: string
 }
 
+function readAsBase64(file: File): Promise<{ name: string; data: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve({ name: file.name, data: result.split(',')[1] })
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function App() {
   const [files, setFiles] = useState<File[]>([])
   const [results, setResults] = useState<UploadResult[]>([])
@@ -24,11 +36,14 @@ export default function App() {
     setProcessing(true)
     setResults([])
 
-    const formData = new FormData()
-    files.forEach((f) => formData.append('files', f))
+    const fileData = await Promise.all(files.map(readAsBase64))
 
     try {
-      const res = await fetch('/api/convert', { method: 'POST', body: formData })
+      const res = await fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: fileData }),
+      })
       const data = await res.json()
       setResults(data.results)
     } catch (err) {
@@ -42,13 +57,16 @@ export default function App() {
     setFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const handleReset = () => {
+    setFiles([])
+    setResults([])
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-neutral-200 overflow-x-hidden">
-      {/* scanlines */}
       <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.04]
         bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,0,0,0.8)_2px,rgba(0,0,0,0.8)_4px)]" />
 
-      {/* grid background */}
       <div
         className="fixed inset-0 pointer-events-none z-0 opacity-[0.04]"
         style={{
@@ -81,7 +99,7 @@ export default function App() {
         )}
 
         {results.length > 0 && (
-          <ResultList results={results} onReset={() => { setFiles([]); setResults([]) }} />
+          <ResultList results={results} onReset={handleReset} />
         )}
       </div>
     </div>

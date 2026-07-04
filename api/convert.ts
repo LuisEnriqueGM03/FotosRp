@@ -1,27 +1,33 @@
-import express from 'express'
-import cors from 'cors'
 import sharp from 'sharp'
 import axios from 'axios'
-import { config } from 'dotenv'
 import FormData from 'form-data'
 
-config()
+export default async function handler(
+  req: { method: string; body: string | Record<string, unknown> },
+  res: {
+    status: (code: number) => { json: (data: unknown) => void }
+    setHeader: (key: string, value: string) => void
+  }
+) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
-const app = express()
-const PORT = 3001
+  if (req.method === 'OPTIONS') {
+    res.status(200).json({})
+    return
+  }
 
-const apiKey = process.env.FIVEMANAGE_API_KEY
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
 
-if (!apiKey || apiKey === 'tu_token_aqui') {
-  console.error('❌ FIVEMANAGE_API_KEY no está configurada en el .env')
-}
-
-app.use(cors())
-app.use(express.json({ limit: '50mb' }))
-
-app.post('/api/convert', async (req, res) => {
   try {
-    const { files } = req.body as { files: { name: string; data: string }[] }
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
+    const { files } = body as { files: { name: string; data: string }[] }
+
+    const apiKey = process.env.FIVEMANAGE_API_KEY
 
     const results = await Promise.all(
       files.map(async (file) => {
@@ -49,11 +55,7 @@ app.post('/api/convert', async (req, res) => {
             }
           )
 
-          return {
-            filename: file.name,
-            url: response.data.data.url,
-            status: 'ok' as const,
-          }
+          return { filename: file.name, url: response.data.data.url, status: 'ok' }
         } catch (err: unknown) {
           let errorMsg = 'Unknown error'
           if (axios.isAxiosError(err)) {
@@ -61,18 +63,14 @@ app.post('/api/convert', async (req, res) => {
           } else if (err instanceof Error) {
             errorMsg = err.message
           }
-          return { filename: file.name, status: 'error' as const, error: errorMsg }
+          return { filename: file.name, status: 'error', error: errorMsg }
         }
       })
     )
 
-    res.json({ results })
+    res.status(200).json({ results })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     res.status(500).json({ error: msg })
   }
-})
-
-app.listen(PORT, () => {
-  console.log(`⚡ Server running on http://localhost:${PORT}`)
-})
+}

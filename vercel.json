@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ],
+  "functions": {
+    "api/convert.ts": {
+      "maxDuration": 30
+    }
+  }
+}
